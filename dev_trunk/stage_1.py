@@ -32,7 +32,9 @@ def _cmdline(command):
     return output
 
 def write_and_plot(mask,chan_nos,freqs,bandpass,outdir):
-    "Writes and plots the bandpass"
+    """
+    Writes and plots the bandpass
+    """
     bad_chans=outdir+'bad_chans.flag'
     bp_plot=outdir+'bandpass.png'
     logging.info('Flagged %d channels',mask.sum())
