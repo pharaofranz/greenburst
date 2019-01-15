@@ -8,7 +8,7 @@ from multiprocessing import Process
 import glob
 import numpy as np
 import pika
-
+from pika_send import send2Q
 
 logger = logging.getLogger()
 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -28,7 +28,9 @@ def stage_initer(values):
         values.file=body.decode()
         logging.info(f'got it {values.file}')
         begin_main(values)
+        logging.info('Done')
         ch.basic_ack(delivery_tag = method.delivery_tag)
+        logging.info("Ack'ed")
     
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(callback,
@@ -89,37 +91,43 @@ def begin_main(values):
     else:
         logging.basicConfig(level=logging.INFO, format=format)
 
-    filterbank=glob.glob(values.file)[0]
+    try:
+        filterbank=glob.glob(values.file)[0]
     
-    freqs, bandpass=filutils.bandpass(filterbank)
-    chan_nos=np.arange(0,bandpass.shape[0])
-    mask=mask_finder(bandpass,chan_nos,values.nchans,values.sigma)
-    bad_chans=chan_nos[mask]
+        freqs, bandpass=filutils.bandpass(filterbank)
+        chan_nos=np.arange(0,bandpass.shape[0])
+        mask=mask_finder(bandpass,chan_nos,values.nchans,values.sigma)
+        bad_chans=chan_nos[mask]
 
-    out_chans=[]
-    
-    for chans in bad_chans:
-        out_chans.append('-zap_chans')
-        out_chans.append(chans)
-        out_chans.append(chans+1)
+        out_chans=[]
+        
+        for chans in bad_chans:
+            out_chans.append('-zap_chans')
+            out_chans.append(chans)
+            out_chans.append(chans+1)
 
-    
-    filterbank_name=filterbank.split('/')[-1].split('.')[0]
-    out_dir='/ldata/trunk/{}/'.format(filterbank_name)
-    _cmdline('mkdir -p {}'.format(out_dir))
-    _cmdline(f'mv {filterbank} {out_dir}/')
-    new_fil_path=f'{out_dir}{filterbank_name}.fil'
+        
+        filterbank_name=filterbank.split('/')[-1].split('.')[0]
+        out_dir='/ldata/trunk/{}/'.format(filterbank_name)
+        _cmdline('mkdir -p {}'.format(out_dir))
+        _cmdline(f'mv {filterbank} {out_dir}/')
+        new_fil_path=f'{out_dir}{filterbank_name}.fil'
 
-    heimdall_command='heimdall -nsamps_gulp 524288 -dm 10 10000 -boxcar_max 128 -cand_sep_filter 256 -cand_sep_dm_trial 20 -cand_sep_time 64 ' \
-            + ''.join(str(x)+' ' for x in out_chans) + ' -output_dir {}'.format(out_dir) + ' -f {}'.format(new_fil_path)
-    logging.info(f'Running {heimdall_command}')
-    p1 = Process(target = _cmdline,args=[heimdall_command])
-    p1.start()
-    p2 = Process(target = write_and_plot,args=[mask,chan_nos,freqs,bandpass,out_dir])
-    p2.start()
+        heimdall_command='heimdall -nsamps_gulp 524288 -dm 10 10000 -boxcar_max 128 -cand_sep_filter 256 -cand_sep_dm_trial 20 -cand_sep_time 64 ' \
+                + ''.join(str(x)+' ' for x in out_chans) + ' -output_dir {}'.format(out_dir) + ' -f {}'.format(new_fil_path)
+        logging.info(f'Running {heimdall_command}')
+        p1 = Process(target = _cmdline,args=[heimdall_command])
+        p1.start()
+        p2 = Process(target = write_and_plot,args=[mask,chan_nos,freqs,bandpass,out_dir])
+        p2.start()
 
-    p1.join()
-    p2.join()
+        p1.join()
+        p2.join()
+
+        send2Q('stage02_queue', f'/ldata/trunk/{filterbank_name}')
+    except IndexError:
+        pass
+    return None
 
 if __name__ == '__main__':
     parser=ArgumentParser(description='Stage 1: Get RFI Flags, run heimdall', formatter_class=ArgumentDefaultsHelpFormatter)
