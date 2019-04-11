@@ -11,6 +11,9 @@ import numpy as np
 import pika
 from pika_send import send2Q
 from scipy.signal import savgol_filter
+from gpu_client import GPURpcClient
+from influx_2df import mjd2influx
+
 
 logger = logging.getLogger()
 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -35,21 +38,10 @@ def stage_initer(values):
         logging.info("Ack'ed")
     
     channel.basic_qos(prefetch_count=1)
-    channel.basic_consume(callback,
+    channel.basic_consume(on_message_callback=callback,
                           queue='stage01_queue')
     
     channel.start_consuming()
-
-#def mask_finder(data,chan_nos,nchan_avg,sigma):
-#    """
-#    Finds the mask for the bandpass
-#    """
-#    total_mask=np.empty(data.shape[0],dtype=bool)*False
-#        
-#    for ii in range(int(data.shape[0]/nchan_avg)):
-#        median=np.median(data[ii*nchan_avg:(ii+1)*nchan_avg-1])
-#        total_mask[ii*nchan_avg:(ii+1)*nchan_avg-1]=data[ii*nchan_avg:(ii+1)*nchan_avg-1]>=(sigma*median)
-#    return total_mask
 
 def mask_finder(data, sigma):
     y = savgol_filter(data,51, 2)
@@ -91,6 +83,13 @@ def write_and_plot(mask,chan_nos,freqs,bandpass,outdir):
     ax11.legend()
     plt.savefig(bp_plot,bbox_inches='tight')
 
+def send2gpuQ(cmd):
+    gpu_rpc_Q = GPURpcClient()
+    response = gpu_rpc_Q.call(cmd)
+    logging.info('Got the following response')
+    logging.info(response)
+    return response
+
 
 
 def begin_main(values):
@@ -106,6 +105,12 @@ def begin_main(values):
 
         fil_obj = pysigproc.SigprocFile(filterbank) 
         freqs = fil_obj.chan_freqs
+        df = mjd2influx(fil_obj.tstart)
+        if df is not None:
+            all_data_valid = df['DATA_VALID'].sum()
+            if all_data_valid < 10:
+                logging.info('Less than 10s of data is valid, skipping this file')
+                return None
         bandpass = fil_obj.bandpass
         chan_nos=np.arange(0,bandpass.shape[0])
         mask=mask_finder(bandpass,values.sigma) #chan_nos,values.nchans,values.sigma)
@@ -122,13 +127,14 @@ def begin_main(values):
         filterbank_name=filterbank.split('/')[-1].split('.')[0]
         out_dir='/ldata/trunk/{}/'.format(filterbank_name)
         _cmdline('mkdir -p {}'.format(out_dir))
-        #_cmdline(f'mv {filterbank} {out_dir}/')
+        _cmdline(f'mv {filterbank} {out_dir}/')
         new_fil_path=f'{out_dir}{filterbank_name}.fil'
 
         heimdall_command='heimdall -nsamps_gulp 524288 -dm 10 10000 -boxcar_max 128 -cand_sep_dm_trial 200 -cand_sep_time 128 -cand_sep_filter 3 ' \
                 + ''.join(str(x)+' ' for x in out_chans) + ' -output_dir {}'.format(out_dir) + ' -f {}'.format(new_fil_path)
         logging.info(f'Running {heimdall_command}')
-        p1 = Process(target = _cmdline,args=[heimdall_command])
+
+        p1 = Process(target = send2gpuQ,args=[heimdall_command])
         p1.start()
         p2 = Process(target = write_and_plot,args=[mask,chan_nos,freqs,bandpass,out_dir])
         p2.start()
@@ -137,6 +143,8 @@ def begin_main(values):
         p2.join()
 
         send2Q('stage02_queue', f'/ldata/trunk/{filterbank_name}')
+        import sys
+        sys.exit()
     except IndexError:
         pass
     return None
@@ -146,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Be verbose')
     parser.add_argument('-d', '--daemon', dest='daemon', action='store_false', help='Run with AMQP')
     parser.add_argument('-n', '--nchans', type=int, help='no. of chans to calc. median over', default=64)
-    parser.add_argument('-s', '--sigma', type=int, help='sigma over which values are tagged as RFI', default=5)
+    parser.add_argument('-s', '--sigma', type=int, help='sigma over which values are tagged as RFI', default=3)
     parser.add_argument('-f', '--file', type=str, help='Filterbank file')
     parser.set_defaults(verbose=False)
     parser.set_defaults(daemon=True)

@@ -9,7 +9,7 @@ def send2Q(queue,body):
         connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
         channel = connection.channel()
         channel.queue_declare(queue=queue, durable=True)
-        channel.basic_publish(exchange='',routing_key=queue,,body=body, properties=pika.BasicProperties(delivery_mode = 2))
+        channel.basic_publish(exchange='',routing_key=queue,body=body, properties=pika.BasicProperties(delivery_mode = 2))
         logging.info(f'Sent {body}')
         return connection.close()
     except:
@@ -31,7 +31,7 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO, format=format)
         logging.getLogger('pika').setLevel(logging.INFO)
     
-    if values.queue not in ['stage01_queue','stage02_queue']:
+    if values.queue not in ['stage01_queue','stage02_queue','gpu_queue']:
         logging.error(f'{queue} not found')
     else:
         send2Q(values.queue,values.message)

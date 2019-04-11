@@ -17,11 +17,9 @@ import time
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 from datetime import datetime, timedelta
+import yaml
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-# needed for the live RA DEC values
-location=EarthLocation.of_site('GBT')
 
 # redis connection
 r = redis.StrictRedis(
@@ -29,8 +27,14 @@ r = redis.StrictRedis(
     port=6379)
 
 # push stuff to influxdb
-client=DataFrameClient(host='127.0.0.1', port=8086, username='telegraf', password='superpa$$word', database='telegraf')
-
+with open("config/conf.yaml", 'r') as stream:
+    data_loaded = yaml.load(stream)
+login_detail = data_loaded['influxdb']
+client = DataFrameClient(host=login_detail['host'],
+                         port=login_detail['port'],
+                         username=login_detail['uname'],
+                         password=login_detail['passw'],
+                         database=login_detail['db'])
 # this will be used for the data validity
 def flag_maker(key,val):
     if key == 'SCPROJID' and val != "JMAINT":
@@ -42,6 +46,9 @@ def flag_maker(key,val):
     elif key == 'ATMFBS' and val == 'BOOM_RETRACTED':
         return 1
 
+    elif key == 'ATRXOCTA' and (250 < val) | (val < 60 ):
+        return 1
+
     else:
         return 0
 
@@ -49,8 +56,9 @@ def data_valid(dict):
     maintainance_flag = flag_maker('SCPROJID', dict['SCPROJID'])
     turret_lock_flag  = flag_maker('ATMTLS', dict['ATMTLS'])
     boom_flag = flag_maker('ATMFBS', dict['ATMFBS'])
+    turret_angle_flag = flag_maker('ATRXOCTA', dict['ATRXOCTA'])
     obs_permission = dict['WEBCNTRL']
-    return maintainance_flag and turret_lock_flag and boom_flag and obs_permission
+    return maintainance_flag and turret_lock_flag and boom_flag and obs_permission and turret_angle_flag
 
 
 # Ron's corrections, check GBT memo for commensal observations
@@ -78,11 +86,11 @@ WEBCNTRL:   Has observer allowed us to get a copy?
 f=float
 integer=int
 s=str
-val_type=[f,s,s,f,s,s,f,f,s,integer]
+val_type=[f,s,s,f,s,s,f,f,f,f,s,integer]
 
 # keys
-names=['MJD','UTC','IFV1TNCI', 'ATRXOCTA', 'SCPROJID', 'ATMTLS', 'ATAZIND', 'ATELIND','ATMFBS','WEBCNTRL']
-
+names=['MJD','UTC','ATRECVR', 'ATRXOCTA', 'SCPROJID', 'ATMTLS', 'ATAZIND', 'ATELIND','ATMFBS','WEBCNTRL']
+influx_names=['MJD','UTC','IFV1TNCI', 'ATRXOCTA', 'SCPROJID', 'ATMTLS', 'ATAZIND', 'AZMJD','ATELIND','ELMJD','ATMFBS','WEBCNTRL']
 def get_pipe():
     pipe =  r.pipeline()
     
@@ -90,6 +98,9 @@ def get_pipe():
     for name in names:
         if name == 'WEBCNTRL':
             pipe.get('WEBCNTRL')
+        elif name == 'ATAZIND' or name == 'ATELIND':
+            pipe.hmget(name,'VALUE')
+            pipe.hmget(name,'MJD')
         else:
             pipe.hmget(name,'VALUE')
     return pipe
@@ -105,18 +116,25 @@ def main():
     telescope_status['tags']='gbt'
     # if float make float
     for i,val in enumerate(value):
-        if val_type[i] == f:
-            telescope_status[f'{names[i]}'] = float(val[0].decode())
-        elif val_type[i] == integer:
-            telescope_status[f'{names[i]}'] = int(val)
+        if val is None and influx_names[i] == 'WEBCNTRL':
+            telescope_status[f'{influx_names[i]}'] = int(1)
         else:
-            telescope_status[f'{names[i]}'] = str(val[0].decode())
+            if val_type[i] == f:
+                telescope_status[f'{influx_names[i]}'] = float(val[0].decode())
+            elif val_type[i] == integer:
+                telescope_status[f'{influx_names[i]}'] = int(val)
+            else:
+                telescope_status[f'{influx_names[i]}'] = str(val[0].decode())
+
     # the Alt Az values are corrected for the turret location
     alt,az=pointing_corr(telescope_status['ATRXOCTA'],telescope_status['ATAZIND'],telescope_status['ATELIND'])
+    assert telescope_status['AZMJD'] == telescope_status['ELMJD']
+    
     # Use the redis time to get the RA DEC from the alt, az values
-    time=Time(telescope_status['MJD'],format='mjd')
-    obj=AltAz(obstime=time,location=EarthLocation.of_site('GBT'),az=az*u.deg, alt=alt*u.deg)
-    c=SkyCoord(obj,equinox='J2000.0').transform_to('fk5')
+    time=Time(telescope_status['AZMJD'],format='mjd')
+    location=EarthLocation(lat=38.4331294*u.deg, lon=-79.8398397*u.deg, height=824.36*u.m)
+    obj=AltAz(obstime=time,location=location,az=az*u.deg, alt=alt*u.deg)
+    c=SkyCoord(obj).transform_to('fk5')
     
     #add few more values to the dict
     telescope_status['DATA_VALID'] = data_valid(telescope_status)
@@ -130,18 +148,10 @@ def main():
     val=client.write_points(df,measurement='telescope')
     return val
 
-    # output to telegraf
-    #out=f'telescope,tag="GBT" backend="greenburst"'
-    #for key, val in telescope_status.items():
-    #    if isinstance(val, float) or isinstance(val, int):
-    #        out+=f',{key}={val}'
-    #    else:
-    #        out+=f',{key}="{val}"'
-    #return out,telescope_status
-
 if __name__ == '__main__':
+    main()
     scheduler = BackgroundScheduler()
-    sleep_time=int(2*3600)
+    sleep_time=int(5*3600)
     scheduler.add_job(main, 'interval', seconds=1,start_date=datetime.now(),end_date=datetime.now()+timedelta(seconds=sleep_time))
     scheduler.start()
 
