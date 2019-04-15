@@ -14,10 +14,11 @@ def on_request(ch, method, props, body):
     gpu_cmd=body.decode()
     logging.info(f'got it {gpu_cmd}')
     response=None
+    #run_cmd(gpu_cmd, response)
     thread = threading.Thread(target=run_cmd, args=(gpu_cmd, response))
     thread.start()
     while thread.is_alive():
-        ch._connection.sleep(1.0)
+        ch._connection.sleep(5.0)
     thread.join()
     logging.info('Done')
 
@@ -26,6 +27,8 @@ def on_request(ch, method, props, body):
                      properties=pika.BasicProperties(correlation_id = \
                                                          props.correlation_id),
                      body=str(response))
+    #while response is None:
+    #    connection.process_data_events()
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 

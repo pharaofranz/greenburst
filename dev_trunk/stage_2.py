@@ -3,7 +3,8 @@
 
 import matplotlib
 matplotlib.use('Agg')
-from subprocess import PIPE, Popen
+import threading
+import subprocess
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import os
 import logging
@@ -15,7 +16,11 @@ import pylab as plt
 import glob
 import pika
 import pysigproc
+import sys
 from influx_2df import mjd2influx, extend_df
+from gpu_client import send2gpuQ
+from pika.exceptions import *
+from slack_send import send_msg_2_slack
 
 __author__='Devansh Agarwal'
 __email__ = 'da0017@mix.wvu.edu'
@@ -34,13 +39,18 @@ def stage_initer(values):
     def callback(ch, method, properties, body):
         values.files=body.decode() +  '/*cand'
         logging.info(f'got it {values.files}')
-        begin_main(values)
         ch.basic_ack(delivery_tag = method.delivery_tag)
+        begin_main(values)
 
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(on_message_callback=callback, queue='stage02_queue')
+    
+    try:
+        channel.start_consuming()
+    except (StreamLostError, ConnectionResetError) as e:
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+        channel = connection.channel()
 
-    channel.start_consuming()
 
 
 def match_cands(cand_df, influx_df):
@@ -59,7 +69,7 @@ def begin_main(values):
     
     if len(cand_lists) != 0:
         cand_df = pd.concat(cand_lists,ignore_index=True)
-        mask_thresholds = (cand_df['snr']>= values.snr) & (cand_df['members']>= values.members) & \
+        mask_thresholds = (cand_df['snr']>= values.snr) & (cand_df['members']>= values.members) & (cand_df['tcand'] <= 497) &\
                 (cand_df['dm'] > values.dm) & (cand_df['width'] <= values.width)
 
         base_work_dir = '/ldata/trunk'
@@ -80,7 +90,9 @@ def begin_main(values):
             cand_df_masked = cand_df[mask]
         
         logging.info(f'Got {len(cand_df)} cands pre-filtering')
-        logging.info(f'Got {len(cand_df_masked)} cands post-filtering')        
+        send_msg_2_slack(f'Got {len(cand_df)} cands pre-filtering at MJD {mjd}')
+        logging.info(f'Got {len(cand_df_masked)} cands post-filtering')
+        send_msg_2_slack(f'Got {len(cand_df_masked)} cands post-filtering at MJD {mjd}')
         if len(cand_df) != 0:
             plt.title(folder)
             ax=cand_df.plot('tcand','dm',kind='scatter',\
@@ -101,7 +113,11 @@ def begin_main(values):
             plt.ylabel('DM (pc/cc)')
             plt.savefig(f'{base_work_dir}/{folder}/{folder}.png', bbox_inches='tight')
             plt.close()
-
+            if len(cand_df_masked) != 0:
+                cmd = f'mkdir -p {base_work_dir}/{folder}/cands'
+                subprocess.run(cmd.split(), stdout=subprocess.PIPE)
+                send2gpuQ(f'candmaker.py -n 9 -c {base_work_dir}/{folder}/{folder}.csv -o {base_work_dir}/{folder}/cands/')
+                send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{folder}/cands/ -m a')
 
     else:
         logging.info('No cands here!')

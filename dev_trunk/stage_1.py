@@ -11,9 +11,11 @@ import numpy as np
 import pika
 from pika_send import send2Q
 from scipy.signal import savgol_filter
-from gpu_client import GPURpcClient
+from gpu_client import send2gpuQ
 from influx_2df import mjd2influx
-
+import sys
+import threading
+from pika.exceptions import * #StreamLostError, ConnectionResetError
 
 logger = logging.getLogger()
 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -32,16 +34,20 @@ def stage_initer(values):
     def callback(ch, method, properties, body):
         values.file=body.decode()
         logging.info(f'got it {values.file}')
+        ch.basic_ack(delivery_tag = method.delivery_tag)
         begin_main(values)
         logging.info('Done')
-        ch.basic_ack(delivery_tag = method.delivery_tag)
+       # ch.basic_ack(delivery_tag = method.delivery_tag)
         logging.info("Ack'ed")
     
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(on_message_callback=callback,
                           queue='stage01_queue')
-    
-    channel.start_consuming()
+    try:    
+        channel.start_consuming()
+    except (StreamLostError, ConnectionResetError) as e:
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+        channel = connection.channel()
 
 def mask_finder(data, sigma):
     y = savgol_filter(data,51, 2)
@@ -83,15 +89,6 @@ def write_and_plot(mask,chan_nos,freqs,bandpass,outdir):
     ax11.legend()
     plt.savefig(bp_plot,bbox_inches='tight')
 
-def send2gpuQ(cmd):
-    gpu_rpc_Q = GPURpcClient()
-    response = gpu_rpc_Q.call(cmd)
-    logging.info('Got the following response')
-    logging.info(response)
-    return response
-
-
-
 def begin_main(values):
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     if values.verbose:
@@ -110,7 +107,9 @@ def begin_main(values):
             all_data_valid = df['DATA_VALID'].sum()
             if all_data_valid < 10:
                 logging.info('Less than 10s of data is valid, skipping this file')
+                _cmdline(f'rm {filterbank}')
                 return None
+        logging.info(f'{100*all_data_valid/len(df)}% data valid')
         bandpass = fil_obj.bandpass
         chan_nos=np.arange(0,bandpass.shape[0])
         mask=mask_finder(bandpass,values.sigma) #chan_nos,values.nchans,values.sigma)
@@ -143,8 +142,6 @@ def begin_main(values):
         p2.join()
 
         send2Q('stage02_queue', f'/ldata/trunk/{filterbank_name}')
-        import sys
-        sys.exit()
     except IndexError:
         pass
     return None

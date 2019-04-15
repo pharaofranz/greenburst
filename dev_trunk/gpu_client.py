@@ -40,9 +40,18 @@ class GPURpcClient(object):
             self.connection.process_data_events()
         return self.response
 
+
+def send2gpuQ(cmd):
+    gpu_rpc_Q = GPURpcClient()
+    response = gpu_rpc_Q.call(cmd)
+    logging.info('Got the following response')
+    logging.info(response)
+    return response
+
 if __name__ == "__main__":
     parser=ArgumentParser(description='GPU RPC Server', formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Be verbose')
+    parser.add_argument('-m', '--gpu_cmd',type=str, default='nvidia-smi')
     parser.set_defaults(verbose=False)
     values = parser.parse_args()
     logger = logging.getLogger()
@@ -54,10 +63,4 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO, format=format)
         logging.getLogger('pika').setLevel(logging.INFO)
 
-    test=str("nvidia-smi")
-
-
-    gpu_rpc = GPURpcClient()
-    response = gpu_rpc.call(test)
-    logging.info('Got following response:')
-    logging.info(f'{response}')
+    send2gpuQ(values.gpu_cmd)

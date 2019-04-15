@@ -32,6 +32,6 @@ if __name__ == "__main__":
         logging.getLogger('pika').setLevel(logging.INFO)
     
     if values.queue not in ['stage01_queue','stage02_queue','gpu_queue']:
-        logging.error(f'{queue} not found')
+        logging.error(f'{values.queue} not found')
     else:
         send2Q(values.queue,values.message)
