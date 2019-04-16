@@ -21,6 +21,8 @@ import yaml
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+OLD_RA = OLD_DEC = 0
+
 # redis connection
 r = redis.StrictRedis(
     host='serendip6',
@@ -106,6 +108,8 @@ def get_pipe():
     return pipe
 
 def main():
+    global OLD_RA
+    global OLD_DEC
     pipe=get_pipe()
     value=pipe.execute()
     
@@ -140,6 +144,10 @@ def main():
     telescope_status['DATA_VALID'] = data_valid(telescope_status)
     telescope_status['RA_deg']=c.ra.deg
     telescope_status['DEC_deg']=c.dec.deg
+    telescope_status['RA_drift'] = c.ra.deg - OLD_RA
+    OLD_RA = c.ra.deg
+    telescope_status['DEC_drift'] = c.dec.deg - OLD_DEC
+    OLD_DEC = c.dec.deg
     telescope_status['GL_deg']=c.galactic.l.deg
     telescope_status['GB_deg']=c.galactic.b.deg
     telescope_status['ELCORR']=alt
