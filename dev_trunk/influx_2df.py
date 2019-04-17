@@ -67,6 +67,8 @@ def extend_df(influx_df, cand_df, tsec = 3):
     cand_df.loc[:,'cand_gb'] = None
     cand_df.loc[:,'cand_ne2001'] = None
     cand_df.loc[:,'cand_ymw16'] = None
+    cand_df.loc[:,'RA_drift'] = None
+    cand_df.loc[:,'DEC_drift'] = None
     cand_df.loc[:,'cand_valid'] = 1 
     
     if influx_df is None:
@@ -93,6 +95,8 @@ def extend_df(influx_df, cand_df, tsec = 3):
             cand_df.loc[index,'ELCORR'] = interpolate_value(row['cand_mjd'], influx_df[mask], 'ELCORR')
             cand_df.loc[index,'RA_deg'] = interpolate_value(row['cand_mjd'], influx_df[mask], 'RA_deg')
             cand_df.loc[index,'DEC_deg'] = interpolate_value(row['cand_mjd'], influx_df[mask], 'DEC_deg')
+            cand_df.loc[index,'RA_drift'] = interpolate_value(row['cand_mjd'], influx_df[mask], 'RA_drift')
+            cand_df.loc[index,'DEC_drift'] = interpolate_value(row['cand_mjd'], influx_df[mask], 'DEC_drift')
             cand_df.loc[index,'SCPROJID'] = set(influx_df['SCPROJID'][mask])
             cand_df.loc[index,'WEBCNTRL'] = 1
             cand_df.loc[index,'IFV1TNCI'] = set(influx_df['IFV1TNCI'][mask])

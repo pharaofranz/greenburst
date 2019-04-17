@@ -1,101 +1,142 @@
 #!/usr/bin/env python3
 
-import matplotlib as mtb
-import pylab as plt
+import matplotlib.pylab as plt
+from scipy.signal import detrend
 import numpy as np
-import pysigproc, filutils
-from scipy.signal import argrelextrema
-import operator
+import pandas as pd
+import h5py
+from collections import OrderedDict
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+import logging
+import tqdm
 
-__author__='Devansh Agarwal'
-__email__ ='da0017@mix.wvu.edu'
+def deg2HMS(ra='', dec='', round=False):
+    (RA, DEC, rs, ds) = ('', '', '', '')
+    if dec.any():
+        if str(dec)[0] == '-':
+            (ds, dec) = ('-', abs(dec))
+        deg = int(dec)
+        decM = abs(int((dec - deg) * 60))
+        if round:
+            decS = int((abs((dec - deg) * 60) - decM) * 60)
+        else:
+            decS = (abs((dec - deg) * 60) - decM) * 60
+        DEC = '{0}{1}:{2}:{3:.2f}'.format(ds, deg, decM, decS)
 
-def SNR(signal):
-    max_index, max_value = max(enumerate(signal), key=operator.itemgetter(1))
-    leftsignal = signal[0:max_index];
-    rightsignal = signal[max_index:];
+    if ra.any():
+        if str(ra)[0] == '-':
+            (rs, ra) = ('-', abs(ra))
+        raH = int(ra / 15)
+        raM = int((ra / 15 - raH) * 60)
+        if round:
+            raS = int(((ra / 15 - raH) * 60 - raM) * 60)
+        else:
+            raS = ((ra / 15 - raH) * 60 - raM) * 60
+        RA = '{0}{1}:{2}:{3:.2f}'.format(rs, raH, raM, raS)
+    return (RA, DEC)
 
-    leftMin = np.array(leftsignal);
-    rightMin = np.array(rightsignal);
+def h5_loction_2_stuff(h5_file):
+    param_dict=OrderedDict()
+    stuff_dict={}
+    with h5py.File(h5_file,'r') as file:
+        stuff_dict['ft']=detrend(np.array(file['data_freq_time'])[:, ::-1].T)
+        stuff_dict['dt']=np.array(file['data_dm_time'])
+        stuff_dict['dm'] = float(file.attrs['dm'])
+        stuff_dict['snr'] = float(file.attrs['snr'])
+        stuff_dict['tcand'] = float(file.attrs['tcand'])
+        
+    folder = h5_file.split('/')[3]
+    df = pd.read_csv(f'/ldata/trunk/{folder}/{folder}.csv')
+    df_mask_dm = df['dm'] == stuff_dict['dm']
+    df_mask_snr = df['snr'] == stuff_dict['snr']
+    df_mask_tcand = df['tcand'] == stuff_dict['tcand']
+    total_mask = df_mask_dm & df_mask_snr & df_mask_tcand
+    row = df[total_mask]
+    ra, dec = deg2HMS(ra=row['RA_deg'].values[0], dec=row['DEC_deg'].values[0])
+    if len(row) > 0:
+        param_dict['S/N'] = float(row['snr'].values[0])
+        param_dict['Width (ms)'] = float(0.256* 2**row['width'].values[0])
+        param_dict['Width (samples)'] = int(2**row['width'].values[0])
+        param_dict['DM (pc/cc)'] = float(row['dm'].values[0])
+        param_dict['NE2001 DM (pc/cc)'] = float(row['cand_ne2001'].values[0])
+        param_dict['YMW16 DM (pc/cc)'] = float(row['cand_ymw16'].values[0])
+        param_dict['MJD'] = str(row['cand_mjd'].values[0])
+        param_dict['RA (J2000)'] = str(ra)
+        param_dict['DEC (J2000)'] = str(dec)
+        param_dict['GL (degree)'] = float(row['cand_gl'].values[0])
+        param_dict['GB (degree)'] = float(row['cand_gb'].values[0])
+        param_dict['Receiver'] = str(row['IFV1TNCI'].values[0])
+        param_dict['Project ID'] = str(row['SCPROJID'].values[0])
+        param_dict['Observation ID'] = str(folder)
+        param_dict['Turret Angle (degree)'] = float(row['ATRXOCTA'].values[0])
+    return stuff_dict, param_dict
 
-    findLMin = argrelextrema(leftMin, np.less)[0][-1];
-    findRMin = argrelextrema(rightMin, np.less)[0][0]+len(leftsignal);
+def plotem(h5_file,fout=None):
+    stuff_dict, param_dict = h5_loction_2_stuff(h5_file)
+    ts = np.linspace(-128,128,num=256)*.256*param_dict['Width (samples)']
 
-    Anoise = np.std(list(signal[0:findLMin])+list(signal[findRMin:])) 
-    Asignal = np.max(signal[findLMin:findRMin]) - np.mean(list(signal[0:findLMin])+list(signal[findRMin:]))
-    snr_value = (Asignal/Anoise)
-    return snr_value
+    if ts[-1]//1000 > 0:
+        ts /= 1000
+        ts_label='Time (s)'
+    else:
+        ts_label='Time (ms)'
+    plt.rc('font', family='monospace')
+    plt.rc('xtick', labelsize='x-small')
+    plt.rc('ytick', labelsize='x-small')
 
-def gb_plotter(first_image,mask,freqs,ts,dm,name):
-    gridsize = (4, 11)
-    fig = plt.figure(figsize=(22, 8))
-    freqs=freqs[::-1]
-    extent=[ts[0],ts[-1],freqs[0],freqs[-1]]
-    bandpass_1 = plt.subplot2grid(gridsize, (0, 0), colspan=1, rowspan=3)
-    bandpass_1.plot(first_image.mean(1)[::-1],freqs)
-    bandpass_1.set_ylabel("Frequency")
-    bandpass_1.invert_xaxis()
+    fig3 = plt.figure(constrained_layout=True,figsize=(9,7))
+    gs = fig3.add_gridspec(5, 4)
     
-    timeseries_1 = plt.subplot2grid(gridsize, (3, 1), colspan=3, rowspan=1)
-    timeseries_1.plot(ts,first_image.mean(0))
-    timeseries_1.set_xlabel("Time")
-
-    image_1 = plt.subplot2grid(gridsize, (0, 1), colspan=3, rowspan=3,sharey=bandpass_1,sharex=timeseries_1)
-    image_1.imshow(first_image,aspect='auto',cmap='gist_heat',interpolation='none', extent=extent)
-    image_1.set_title("Candidate")
+    # DMT plot
+    f3_ax3 = fig3.add_subplot(gs[3:5, :2])
+    f3_ax3.imshow(stuff_dict['dt'],aspect='auto',
+                  interpolation=None,extent=[ts[0],ts[-1],2*param_dict['DM (pc/cc)'],0])
+    f3_ax3.set_ylabel('DM (pc/cc)')
+    f3_ax3.set_xlabel(ts_label)
     
-    ###########################################
-    
-    sec_image=first_image*1.0*mask
-    image_2 = plt.subplot2grid(gridsize, (0, 4), colspan=3, rowspan=3, sharey=bandpass_1,sharex=timeseries_1)
-    image_2.imshow(mask,aspect='auto',cmap='binary',interpolation='none',extent=extent)
-    image_2.set_title("Mask")
-    
-    ###########################################
+    # time profile
+    f3_ax1 = fig3.add_subplot(gs[0, :2],sharex=f3_ax3)
+    f3_ax1.plot(ts,stuff_dict['ft'].sum(0),'k',linewidth=.7)
+    f3_ax1.set_ylabel('Arb. Flux')
+    plt.setp(f3_ax1.get_xticklabels(), visible=False)
 
-    bandpass_3 = plt.subplot2grid(gridsize, (0, 10), colspan=1, rowspan=3,sharey=bandpass_1)
-    bandpass_3.plot(sec_image.mean(1)[::-1],freqs)
-    bandpass_3.yaxis.tick_right()
-    bandpass_3.yaxis.set_label_position("right")
-    bandpass_3.set_ylabel("Frequency")
+    # FT plot
+    f3_ax2 = fig3.add_subplot(gs[1:3, :2],sharex=f3_ax3)
+    f3_ax2.imshow(stuff_dict['ft'],aspect='auto',
+                  interpolation=None,
+                  extent=[ts[0],ts[-1],1919.8828125,959.8828125])
+    f3_ax2.set_ylabel('Frequency (Mhz)')
+    plt.setp(f3_ax2.get_xticklabels(), visible=False)
 
-    image_3 = plt.subplot2grid(gridsize, (0, 7), colspan=3, rowspan=3, sharey=bandpass_1,sharex=timeseries_1)
-    image_3.imshow(sec_image,aspect='auto',cmap='gist_heat',interpolation='none',extent=extent)
-    image_3.set_title("Candidate")
-
-    timeseries_3 = plt.subplot2grid(gridsize, (3, 7), colspan=3, rowspan=1, sharex=timeseries_1)
-    timeseries_3.plot(ts,sec_image.mean(0))
-    timeseries_3.set_xlabel("Time")
-
-    ###########################################
-   
-    timeseries_2 = plt.subplot2grid(gridsize, (3, 4), colspan=3, rowspan=1)
-    props = dict(boxstyle='round', facecolor='wheat', alpha=0.35)
-    snr_pre=10.0 #SNR(first_image.mean(0))
-    snr_post=10.0 #SNR(sec_image.mean(0))
-    text='DM : '+'{:6.2f}'.format(dm)+'\nS/N (pre flagging): '+'{:6.2f}'.format(snr_pre)+'\nS/N (post flagging): '\
-    +'{:6.2f}'.format(snr_post)
-    timeseries_2.text(0.1, 0.9, text, transform=timeseries_2.transAxes, fontsize=14,
-        verticalalignment='top', bbox=props)
-    timeseries_2.axis('off')
-
-    ###########################################
-    
+    # metadata
+    size = 13
+    f3_ax4 = fig3.add_subplot(gs[:, 3])
+    for idx, pair in enumerate(reversed(param_dict.items())):
+           if isinstance(pair[1], str) or  isinstance(pair[1], int):
+               f3_ax4.text(-0.75,0.15+ idx/20,f' {pair[0]}: {pair[1]}',size=size, transform=f3_ax4.transAxes)
+           else:
+               f3_ax4.text(-0.75,0.15+idx/20,f' {pair[0]}: {pair[1]:.2f}', size=size, transform=f3_ax4.transAxes)
+    f3_ax4.set_axis_off()
     plt.tight_layout()
-    fig.subplots_adjust(hspace=0)   
-    fig.subplots_adjust(wspace=0)
-    for ax in [image_1, image_2, image_3]:
-        plt.setp(ax.get_xticklabels(), visible=False)
-        plt.setp(ax.get_yticklabels(), visible=False)
-        # The y-ticks will overlap with "hspace=0", so we'll hide the bottom tick
-    #    ax.set_yticks(ax.get_yticks()[1:]) 
-    plt.savefig(name,bbox_inches='tight')
+    plt.subplots_adjust(hspace=.0)
+    plt.subplots_adjust(wspace=.0)
+    if fout is None:
+        fout = h5_file[:-3]+'.png'
+    plt.savefig(fout, bbox_inches='tight')
+    return fout
 
-#105.67	486375	124.512	6	1	2.2913	125	485677	487453
+if __name__ == '__main__':
+    parser=ArgumentParser(description='Plot cands', formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Be verbose')
+    parser.add_argument('-f', '--files', nargs='+', help='Filterbank file')
+    parser.set_defaults(verbose=False)
+    values = parser.parse_args()
 
-fil_file='/sdata/filterbank/frb_2018-06-20_13-29-56.fil'
-img,freqs,ts,tsmap=filutils.fil_data(fil_file,124.512-0.5,1)
-dm=2.2913
-mask=np.ones(img.T.shape)*True
-img=filutils.dedisp(img,dm,freqs,tsmap,len(freqs))
-gb_plotter(img.T,mask,freqs,ts,dm,'some.png')
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    if values.verbose:
+        logging.basicConfig(level=logging.DEBUG, format=format)
+    else:
+        logging.basicConfig(level=logging.INFO, format=format)
+    for file in tqdm.tqdm(values.files):
+        logging.debug(f'plotting {file}')
+        plotem(file)
