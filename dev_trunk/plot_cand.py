@@ -138,4 +138,5 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(level=logging.INFO, format=format)
     for file in tqdm.tqdm(values.files):
+        logging.debug(f'plotting {file}')
         plotem(file)
