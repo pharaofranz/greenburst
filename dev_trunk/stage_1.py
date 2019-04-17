@@ -105,8 +105,8 @@ def begin_main(values):
         df = mjd2influx(fil_obj.tstart)
         if df is not None:
             all_data_valid = df['DATA_VALID'].sum()
-            if all_data_valid < 10:
-                logging.info('Less than 10s of data is valid, skipping this file')
+            if all_data_valid < 33:
+                logging.info('Less than 33s of data is valid, skipping this file')
                 _cmdline(f'rm {filterbank}')
                 return None
         logging.info(f'{100*all_data_valid/len(df)}% data valid')
