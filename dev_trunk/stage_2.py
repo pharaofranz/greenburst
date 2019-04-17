@@ -15,6 +15,7 @@ from pandas.errors import EmptyDataError
 import pylab as plt
 import glob
 import pika
+from pika_send import send2Q
 import pysigproc
 import sys
 from influx_2df import mjd2influx, extend_df
@@ -76,10 +77,10 @@ def begin_main(values):
         folder=files.split('/')[-2]
 
 
+        fil_file = glob.glob(f'{base_work_dir}/{folder}/*.fil')[0]
+        fil_obj = pysigproc.SigprocFile(fp=fil_file)
+        mjd = fil_obj.tstart
         if len(cand_df[mask_thresholds]) > 0:
-            fil_file = glob.glob(f'{base_work_dir}/{folder}/*.fil')[0]
-            fil_obj = pysigproc.SigprocFile(fp=fil_file)
-            mjd = fil_obj.tstart
             influx_df = mjd2influx(mjd)
             cand_df.loc[:,'cand_mjd'] = mjd + (cand_df['tcand']/(60*60*24))
             extended_df  = extend_df(influx_df, cand_df[mask_thresholds])
@@ -107,7 +108,7 @@ def begin_main(values):
                 cand_df_masked.to_csv(f'{base_work_dir}/{folder}/{folder}.csv',index=False,
                         header=True,columns=['fil_file','snr','tcand','dm','width','kill_mask',
                                               'cand_mjd','ATAZIND','ATELIND','AZCORR','ELCORR','RA_deg',
-                                              'DEC_deg','SCPROJID','WEBCNTRL','IFV1TNCI','ATRXOCTA',
+                                              'DEC_deg','RA_drift','DEC_drift','SCPROJID','WEBCNTRL','IFV1TNCI','ATRXOCTA',
                                               'cand_gl','cand_gb','cand_ne2001','cand_ymw16','cand_valid'])
             plt.xlabel('Time (s)')
             plt.ylabel('DM (pc/cc)')
@@ -118,6 +119,16 @@ def begin_main(values):
                 subprocess.run(cmd.split(), stdout=subprocess.PIPE)
                 send2gpuQ(f'candmaker.py -n 9 -c {base_work_dir}/{folder}/{folder}.csv -o {base_work_dir}/{folder}/cands/')
                 send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{folder}/cands/ -m a')
+
+                results = pd.read_csv(f'{base_work_dir}/{folder}/cands/results_a.csv')
+                label_mask = (results['label'] == 1)
+                send_msg_2_slack(f'Got {label_mask.sum()} cands post-FETCH at MJD {mjd}')
+                if label_mask.sum() > 1:
+                    send2Q("stage03_queue", f'{base_work_dir}/{folder}')
+                else:
+                    delete_cmd = "put delete cmd here"
+                    #subprocess.run(cmd.split(), stdout=subprocess.PIPE)
+                    
 
     else:
         logging.info('No cands here!')
