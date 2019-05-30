@@ -10,6 +10,7 @@ from plot_cand import plotem
 import dropbox
 import yaml
 import re
+from slack_send import send_img_2_slack
 
 logger = logging.getLogger()
 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -37,26 +38,22 @@ def stage_initer(values):
     channel.start_consuming()
 
 def begin_main(values):
-    csv=glob.glob(f'{values.file}/cands/results_a.csv')[0]
-    cand_list = pd.read_csv(csv)
-
     with open("config/conf.yaml", 'r') as stream:
         data_loaded = yaml.load(stream)
     TOKEN = data_loaded['dropbox']['token']
     dbx = dropbox.Dropbox(TOKEN)
-    mask = cand_list['label'] == 0
-    for cands in list(cand_list['candidate'][mask]):
-        fout=plotem(cands)
-        file_name=fout.split('/')[-1][:-3]
-        with open(fout, 'rb') as f:
-            data = f.read()
-            response=dbx.files_upload(data,f'/plots/{file_name}png',mode=dropbox.files.WriteMode.overwrite)
-            logging.info(response)
-            link=dbx.sharing_create_shared_link(f'/plots/{file_name}png')
-            url=link.url
-            slack_send_url=re.sub(r"\?dl\=0", "?dl=1", url)
-        logging.info(f'Create png at {fout}')
-        logging.info(f'Dropbox URL {slack_send_url}')
+    fout=plotem(values.file)
+    file_name=fout.split('/')[-1][:-3]
+    with open(fout, 'rb') as f:
+        data = f.read()
+        response=dbx.files_upload(data,f'/plots/{file_name}png',mode=dropbox.files.WriteMode.overwrite)
+        logging.info(response)
+        link=dbx.sharing_create_shared_link(f'/plots/{file_name}png')
+        url=link.url
+        slack_send_url=re.sub(r"\?dl\=0", "?dl=1", url)
+    logging.info(f'Create png at {fout}')
+    logging.info(f'Dropbox URL {slack_send_url}')
+    send_img_2_slack(slack_send_url)
     return None
 
 

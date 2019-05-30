@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pylab as plt
 from scipy.signal import detrend
 import numpy as np
@@ -9,30 +11,36 @@ from collections import OrderedDict
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 import logging
 import tqdm
+from psrqpy import QueryATNF
+
+def qpsr(sample_ra =6.02363,sample_dec =-72.08128):
+    (ra,dec)=deg2HMS(ra=sample_ra, dec=sample_dec)
+    c=[ra,dec,0.2]
+    logging.info(f'Querying with  {c}')
+    query = QueryATNF(params=['BNAME','JNAME', 'RAJ', 'DECJ','DM', 'S1400', 'P0'], circular_boundary=c)
+    return query.table
 
 def deg2HMS(ra='', dec='', round=False):
     (RA, DEC, rs, ds) = ('', '', '', '')
-    if dec.any():
-        if str(dec)[0] == '-':
-            (ds, dec) = ('-', abs(dec))
-        deg = int(dec)
-        decM = abs(int((dec - deg) * 60))
-        if round:
-            decS = int((abs((dec - deg) * 60) - decM) * 60)
-        else:
-            decS = (abs((dec - deg) * 60) - decM) * 60
-        DEC = '{0}{1}:{2}:{3:.2f}'.format(ds, deg, decM, decS)
-
-    if ra.any():
-        if str(ra)[0] == '-':
-            (rs, ra) = ('-', abs(ra))
-        raH = int(ra / 15)
-        raM = int((ra / 15 - raH) * 60)
-        if round:
-            raS = int(((ra / 15 - raH) * 60 - raM) * 60)
-        else:
-            raS = ((ra / 15 - raH) * 60 - raM) * 60
-        RA = '{0}{1}:{2}:{3:.2f}'.format(rs, raH, raM, raS)
+    if str(dec)[0] == '-':
+        (ds, dec) = ('-', abs(dec))
+    deg = int(dec)
+    decM = abs(int((dec - deg) * 60))
+    if round:
+        decS = int((abs((dec - deg) * 60) - decM) * 60)
+    else:
+        decS = (abs((dec - deg) * 60) - decM) * 60
+    DEC = '{0}{1}d{2}m{3:.2f}s'.format(ds, deg, decM, decS)
+    
+    if str(ra)[0] == '-':
+        (rs, ra) = ('-', abs(ra))
+    raH = int(ra / 15)
+    raM = int((ra / 15 - raH) * 60)
+    if round:
+        raS = int(((ra / 15 - raH) * 60 - raM) * 60)
+    else:
+        raS = ((ra / 15 - raH) * 60 - raM) * 60
+    RA = '{0}{1}h{2}m{3:.2f}s'.format(rs, raH, raM, raS)
     return (RA, DEC)
 
 def h5_loction_2_stuff(h5_file):
@@ -46,7 +54,10 @@ def h5_loction_2_stuff(h5_file):
         stuff_dict['tcand'] = float(file.attrs['tcand'])
         
     folder = h5_file.split('/')[3]
-    df = pd.read_csv(f'/ldata/trunk/{folder}/{folder}.csv')
+    if "gal" in h5_file:
+        df = pd.read_csv(f'/ldata/trunk/{folder}/{folder}_gal.csv')
+    else:
+        df = pd.read_csv(f'/ldata/trunk/{folder}/{folder}.csv')
     df_mask_dm = df['dm'] == stuff_dict['dm']
     df_mask_snr = df['snr'] == stuff_dict['snr']
     df_mask_tcand = df['tcand'] == stuff_dict['tcand']
@@ -63,6 +74,10 @@ def h5_loction_2_stuff(h5_file):
         param_dict['MJD'] = str(row['cand_mjd'].values[0])
         param_dict['RA (J2000)'] = str(ra)
         param_dict['DEC (J2000)'] = str(dec)
+        if 'gal' in h5_file:
+            psr_table = qpsr(float(row['RA_deg'].values[0]), float(row['DEC_deg'].values[0]))
+            if len(psr_table) > 0:
+                logging.info(psr_table)
         param_dict['GL (degree)'] = float(row['cand_gl'].values[0])
         param_dict['GB (degree)'] = float(row['cand_gb'].values[0])
         param_dict['Receiver'] = str(row['IFV1TNCI'].values[0])

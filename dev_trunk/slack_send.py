@@ -7,7 +7,7 @@ import logging
 def send_msg_2_slack(msg):
     with open("config/conf.yaml", 'r') as stream:
         data_loaded = yaml.load(stream)
-    TOKEN = data_loaded['slack']['token']
+    TOKEN = data_loaded['slack']['bot_oauth']
     
     sc = SlackClient(TOKEN)
     
@@ -16,6 +16,17 @@ def send_msg_2_slack(msg):
       channel="CB7BGC70E",
       text=msg
     )
+    return response
+
+def send_img_2_slack(img):
+    with open("config/conf.yaml", 'r') as stream:
+        data_loaded = yaml.load(stream)
+    TOKEN = data_loaded['slack']['bot_oauth']
+    
+    sc = SlackClient(TOKEN)
+    attachments = [{"title": "Candidate", "image_url": img}]
+    response=sc.api_call("chat.postMessage", channel='CB7BGC70E', text='Potential Candidate',
+                attachments=attachments)
     return response
 
 
