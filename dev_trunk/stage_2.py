@@ -70,7 +70,7 @@ def begin_main(values):
     
     if len(cand_lists) != 0:
         cand_df = pd.concat(cand_lists,ignore_index=True)
-        mask_thresholds = (cand_df['snr']>= values.snr) & (cand_df['members']>= values.members) & (cand_df['tcand'] <= 497) &\
+        mask_thresholds = (cand_df['snr']>= values.snr) & (cand_df['members']>= values.members) & (cand_df['tcand'] <= 504) &\
                 (cand_df['dm'] > values.dm) & (cand_df['width'] <= values.width)
 
         base_work_dir = '/ldata/trunk'
@@ -117,14 +117,16 @@ def begin_main(values):
             if len(cand_df_masked) != 0:
                 cmd = f'mkdir -p {base_work_dir}/{folder}/cands'
                 subprocess.run(cmd.split(), stdout=subprocess.PIPE)
-                send2gpuQ(f'candmaker.py -n 9 -c {base_work_dir}/{folder}/{folder}.csv -o {base_work_dir}/{folder}/cands/')
+                send2gpuQ(f'candmaker.py -n 10 -c {base_work_dir}/{folder}/{folder}.csv -o {base_work_dir}/{folder}/cands/')
                 send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{folder}/cands/ -m a')
 
                 results = pd.read_csv(f'{base_work_dir}/{folder}/cands/results_a.csv')
                 label_mask = (results['label'] == 1)
                 send_msg_2_slack(f'Got {label_mask.sum()} cands post-FETCH at MJD {mjd}')
-                if label_mask.sum() > 1:
-                    send2Q("stage03_queue", f'{base_work_dir}/{folder}')
+                if label_mask.sum() >= 1:
+                    files = results[label_mask]['candidate']
+                    for file in files:
+                        send2Q("stage03_queue", file)
                 else:
                     delete_cmd = "put delete cmd here"
                     #subprocess.run(cmd.split(), stdout=subprocess.PIPE)
@@ -141,7 +143,7 @@ if __name__=='__main__':
     parser=ArgumentParser(description='Stage 2: Sort Cands', formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Be verbose')
     parser.add_argument('-d', '--daemon', dest='daemon', action='store_false', help='Run with AMQP')
-    parser.add_argument('-s', '--snr', type=int, help='sigma over which values are tagged as RFI', default=9.5)
+    parser.add_argument('-s', '--snr', type=int, help='sigma over which values are tagged as RFI', default=8.0)
     parser.add_argument('-w', '--width', type=int, help = 'log 2 width of the candidates', default=7)
     parser.add_argument('-D', '--dm', type=float, help = 'minimum DM to look out for', default=30)
     parser.add_argument('-m', '--members', type=int, help='minimum number of members in the cluster', default=5)

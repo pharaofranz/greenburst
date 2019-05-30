@@ -7,8 +7,9 @@ from influxdb import DataFrameClient
 import logging
 import numpy as np
 import subprocess
-from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import CubicSpline as UnivariateSpline
 import logging
+import sys
 
 def mjd2influx(mjd):
     with open("config/conf.yaml", 'r') as stream:
@@ -32,12 +33,17 @@ def mjd2influx(mjd):
         return None
 
 def interpolate_value(mjd, df, key):
+    if key == "RA_deg":
+        spl = UnivariateSpline(df['MJD'], y=df[key]-180.0)
+        interpolated_ra =  spl(mjd)
+        if interpolated_ra + 180 > 360:
+            return interpolated_ra
+        else:
+            return interpolated_ra + 180
     spl = UnivariateSpline(df['MJD'], y=df[key])
-    print(spl(mjd))
     return spl(mjd)
     
 def get_both_dms(gl, gb):
-    print(gl, gb)
     ne2001_cmd = f'NE2001 {gl} {gb} 25 -1'
     ymw16_cmd = f'ymw16 Gal {gl} {gb} 25000 2'
     ne2001_output = subprocess.run(ne2001_cmd.split(), stdout=subprocess.PIPE).stdout
@@ -97,20 +103,33 @@ def extend_df(influx_df, cand_df, tsec = 3):
             cand_df.loc[index,'DEC_deg'] = interpolate_value(row['cand_mjd'], influx_df[mask], 'DEC_deg')
             cand_df.loc[index,'RA_drift'] = interpolate_value(row['cand_mjd'], influx_df[mask], 'RA_drift')
             cand_df.loc[index,'DEC_drift'] = interpolate_value(row['cand_mjd'], influx_df[mask], 'DEC_drift')
-            cand_df.loc[index,'SCPROJID'] = set(influx_df['SCPROJID'][mask])
+            cand_df.loc[index,'SCPROJID'] = ''.join(set(influx_df['SCPROJID'][mask]))
             cand_df.loc[index,'WEBCNTRL'] = 1
-            cand_df.loc[index,'IFV1TNCI'] = set(influx_df['IFV1TNCI'][mask])
-            cand_df.loc[index,'ATRXOCTA'] = set(influx_df['ATRXOCTA'][mask])
+            cand_df.loc[index,'IFV1TNCI'] = ''.join(set(influx_df['IFV1TNCI'][mask]))
+            cand_df.loc[index,'ATRXOCTA'] = list(set(influx_df['ATRXOCTA'][mask]))[0]
     return cand_df
 
 if __name__ == "__main__":
     logging_format = '%(asctime)s - %(funcName)s -%(name)s - %(levelname)s - %(message)s'
     logging.basicConfig(level=logging.INFO, format=logging_format)
-    random_dict = {}
-    MJD = 58583.85
-    random_dict['tcand'] = np.random.uniform(0,490,5)
-    random_dict['dm'] = np.random.uniform(0,4900,5)
-    cand_df = pd.DataFrame(random_dict)
-    cand_df.loc[:,'cand_mjd'] = MJD + (cand_df['tcand']/(60*60*24))
-    influx_df = mjd2influx(MJD)
-    print(extend_df(influx_df, cand_df))
+    #random_dict = {}
+    #MJD = 58583.85
+    #random_dict['tcand'] = np.random.uniform(0,490,5)
+    #random_dict['dm'] = np.random.uniform(0,4900,5)
+    #cand_df = pd.DataFrame(random_dict)
+    #cand_df.loc[:,'cand_mjd'] = MJD + (cand_df['tcand']/(60*60*24))
+    #influx_df = mjd2influx(MJD)
+    #print(extend_df(influx_df, cand_df))
+    mjd = float(sys.argv[1])
+    influx_df = mjd2influx(mjd)
+    print(influx_df)
+    if influx_df is None:
+        print(mjd, None)
+    else:
+        print(mjd, len(influx_df))
+        #print(influx_df['DEC_deg'])
+        #import pylab as plt
+        #plt.plot(influx_df['MJD'],influx_df['DEC_deg'],'.')
+        #plt.axvline(mjd,color='k')
+        #plt.show()
+        #print(interpolate_value(mjd, influx_df, 'DEC_deg'))

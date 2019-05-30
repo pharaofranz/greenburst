@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 import yaml
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.getLogger("apscheduler.executors.default").setLevel(logging.ERROR)
 
 OLD_RA = OLD_DEC = 0
 
@@ -48,7 +49,7 @@ def flag_maker(key,val):
     elif key == 'ATMFBS' and val == 'BOOM_RETRACTED':
         return 1
 
-    elif key == 'ATRXOCTA' and (250 < val) | (val < 60 ):
+    elif key == 'ATRXOCTA' and (250 < np.round(val)) | (np.round(val) < 110 ):
         return 1
 
     else:
@@ -60,6 +61,10 @@ def data_valid(dict):
     boom_flag = flag_maker('ATMFBS', dict['ATMFBS'])
     turret_angle_flag = flag_maker('ATRXOCTA', dict['ATRXOCTA'])
     obs_permission = dict['WEBCNTRL']
+    if obs_permission == 0:
+        logging.info('Observer does not permitt data')
+    if turret_angle_flag == 0:
+        logging.debug('Unfavorable turret position')
     return maintainance_flag and turret_lock_flag and boom_flag and obs_permission and turret_angle_flag
 
 
@@ -133,8 +138,10 @@ def main():
     # the Alt Az values are corrected for the turret location
     alt,az=pointing_corr(telescope_status['ATRXOCTA'],telescope_status['ATAZIND'],telescope_status['ATELIND'])
     assert telescope_status['AZMJD'] == telescope_status['ELMJD']
+    #assert abs(telescope_status['AZMJD'] - telescope_status['ELMJD']) < 2/(3600*24)
     
     # Use the redis time to get the RA DEC from the alt, az values
+    telescope_status['MJD'] = float(telescope_status['AZMJD'])
     time=Time(telescope_status['AZMJD'],format='mjd')
     location=EarthLocation(lat=38.4331294*u.deg, lon=-79.8398397*u.deg, height=824.36*u.m)
     obj=AltAz(obstime=time,location=location,az=az*u.deg, alt=alt*u.deg)
@@ -153,7 +160,11 @@ def main():
     telescope_status['ELCORR']=alt
     telescope_status['AZCORR']=az
     df=pd.DataFrame(telescope_status,index=[pd.to_datetime(Time(telescope_status['MJD'],format='mjd').iso)])
-    val=client.write_points(df,measurement='telescope')
+    logging.debug(df.values.tolist())
+    val=client.write_points(df,measurement='telescope',time_precision='n')
+    for key in df.keys():
+        logging.debug(f'{key}, {df[key]}')
+    #logging.info(val)
     return val
 
 if __name__ == '__main__':

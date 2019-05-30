@@ -16,6 +16,8 @@ from influx_2df import mjd2influx
 import sys
 import threading
 from pika.exceptions import * #StreamLostError, ConnectionResetError
+from dump_all import tel_df_to_es
+from elasticsearch import Elasticsearch
 
 logger = logging.getLogger()
 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -50,7 +52,7 @@ def stage_initer(values):
         channel = connection.channel()
 
 def mask_finder(data, sigma):
-    y = savgol_filter(data,51, 2)
+    y = savgol_filter(data,61, 2)
     chanel_nos = np.arange(4096)
     mask = (data-y > sigma) | (data-y < -sigma)
     return mask
@@ -100,6 +102,7 @@ def begin_main(values):
         filterbank=glob.glob(values.file)[0]
 
 
+
         fil_obj = pysigproc.SigprocFile(filterbank) 
         freqs = fil_obj.chan_freqs
         df = mjd2influx(fil_obj.tstart)
@@ -109,6 +112,9 @@ def begin_main(values):
                 logging.info('Less than 33s of data is valid, skipping this file')
                 _cmdline(f'rm {filterbank}')
                 return None
+            else:
+                es=Elasticsearch([{'host':'localhost','port':9200}])
+                tel_df_to_es(es,df,filterbank)
         logging.info(f'{100*all_data_valid/len(df)}% data valid')
         bandpass = fil_obj.bandpass
         chan_nos=np.arange(0,bandpass.shape[0])
