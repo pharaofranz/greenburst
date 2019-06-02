@@ -1,0 +1,31 @@
+{
+ "mappings": {
+       "properties": {
+       "type"          : { "type": "keyword" },
+       "Filename"      : {"type" : "text"},
+       "Eq"            : {"type" : "geo_point"},
+       "Gal"           : {"type" : "geo_point"},
+       "MJD"           : {"type" : "float"},
+       "UTC"           : {"type" : "date"},
+       "Turret_angle"  : {"type" : "float"},
+       "Receiver"      : {"type" : "keyword"},
+       "Project_ID"    : {"type" : "keyword"},
+       "Time_spent"    : {"type" : "float"},
+       "S/N"          : {"type" : "float"},
+       "tcand"        : {"type" : "float"},
+       "dm"           : {"type" : "float"},
+       "width"        : {"type" : "integer"},
+       "Horiz_uncorr" : {"type" : "geo_point"},
+       "Horiz_corr"   : {"type" : "geo_point"},
+       "RA_drift"     : {"type" : "float"},
+       "DEC_drift"    : {"type" : "float"},
+       "dm_ne2001"    : {"type" : "float"},
+       "dm_ymw16"     : {"type" : "float"},
+       "actions"      : {"type" : "keyword"},
+       "callback_id"  : {"type" : "text"},
+       "user_name"    : {"type" : "keyword"},
+       "action_ts"    : {"type" : "date"},
+       "message_ts"   : {"type" : "date"}
+                     }
+              }
+}
