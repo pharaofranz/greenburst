@@ -15,10 +15,12 @@ from psrqpy import QueryATNF
 
 def qpsr(sample_ra =6.02363,sample_dec =-72.08128):
     (ra,dec)=deg2HMS(ra=sample_ra, dec=sample_dec)
-    c=[ra,dec,0.2]
+    c=[ra,dec,1]
+    #c=['00h24m05.67s','-72d04m52.62s',1]
     logging.info(f'Querying with  {c}')
-    query = QueryATNF(params=['BNAME','JNAME', 'RAJ', 'DECJ','DM', 'S1400', 'P0'], circular_boundary=c)
-    return query.table
+    query = QueryATNF(params=['BNAME','JNAME', 'RAJ', 'DECJ','DM', 'S1400', 'P0'],
+                      circular_boundary=c,include_errs=False)
+    return query, query.table[:5]
 
 def deg2HMS(ra='', dec='', round=False):
     (RA, DEC, rs, ds) = ('', '', '', '')
@@ -74,16 +76,21 @@ def h5_loction_2_stuff(h5_file):
         param_dict['MJD'] = str(row['cand_mjd'].values[0])
         param_dict['RA (J2000)'] = str(ra)
         param_dict['DEC (J2000)'] = str(dec)
-        if 'gal' in h5_file:
-            psr_table = qpsr(float(row['RA_deg'].values[0]), float(row['DEC_deg'].values[0]))
-            if len(psr_table) > 0:
-                logging.info(psr_table)
         param_dict['GL (degree)'] = float(row['cand_gl'].values[0])
         param_dict['GB (degree)'] = float(row['cand_gb'].values[0])
         param_dict['Receiver'] = str(row['IFV1TNCI'].values[0])
         param_dict['Project ID'] = str(row['SCPROJID'].values[0])
         param_dict['Observation ID'] = str(folder)
         param_dict['Turret Angle (degree)'] = float(row['ATRXOCTA'].values[0])
+        if np.min([param_dict['NE2001 DM (pc/cc)'], param_dict['YMW16 DM (pc/cc)']]) > param_dict['DM (pc/cc)']:
+            query, psr_table = qpsr(float(row['RA_deg'].values[0]), float(row['DEC_deg'].values[0]))
+            if len(psr_table) > 0:
+                param_dict['Known Nearby Sources'] = [query, psr_table]
+                logging.debug(psr_table)
+            else:
+                param_dict['Known Nearby Sources'] = str(None)
+                logging.info('No known pulsars in the field')
+
     return stuff_dict, param_dict
 
 def plotem(h5_file,fout=None):
@@ -127,10 +134,18 @@ def plotem(h5_file,fout=None):
     size = 13
     f3_ax4 = fig3.add_subplot(gs[:, 3])
     for idx, pair in enumerate(reversed(param_dict.items())):
-           if isinstance(pair[1], str) or  isinstance(pair[1], int):
-               f3_ax4.text(-0.75,0.15+ idx/20,f' {pair[0]}: {pair[1]}',size=size, transform=f3_ax4.transAxes)
-           else:
-               f3_ax4.text(-0.75,0.15+idx/20,f' {pair[0]}: {pair[1]:.2f}', size=size, transform=f3_ax4.transAxes)
+        if isinstance(pair[1], str) or  isinstance(pair[1], int):
+            f3_ax4.text(-0.75,0.15+ idx/20,f'{pair[0]}: {pair[1]}',size=size, transform=f3_ax4.transAxes)
+        elif isinstance(pair[1],list):
+            f3_ax4.text(-0.75,0.15+idx/20,f'{pair[0]}:', size=size, transform=f3_ax4.transAxes)
+            for psr_idx, psr in enumerate(pair[1][1]):
+                if isinstance(psr['BNAME'],str):
+                    string=f"{ psr['BNAME']}--{psr['DM']:.2f} pc/cc--{psr['P0']*1000:3.3f} ms--{psr['S1400']:.2f} mJy"
+                else:
+                    string=f"{ psr['JNAME']}--{psr['DM']:.2f} pc/cc--{psr['P0']*1000:3.3f} ms--{psr['S1400']:.2f} mJy"
+                f3_ax4.text(-0.75,0.1-psr_idx/30,string,size=8, transform=f3_ax4.transAxes)
+        else:
+            f3_ax4.text(-0.75,0.15+idx/20,f'{pair[0]}: {pair[1]:.2f}', size=size, transform=f3_ax4.transAxes)
     f3_ax4.set_axis_off()
     plt.tight_layout()
     plt.subplots_adjust(hspace=.0)
