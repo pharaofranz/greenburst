@@ -1,3 +1,3 @@
-# greenburst-survey
+# My heavily modified version of Devanshkv's greenburst repo.
 
-Scripts and configuration files for the GREENBURST survey.
+This is used to run the frb-baseband search package via a rabitMQ queuing system.
