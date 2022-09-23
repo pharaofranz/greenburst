@@ -6,11 +6,12 @@ import glob
 import pika
 import pandas as pd
 from pika_send import send2Q
-from plot_cand import plotem
+#from plot_cand import plotem
+from h5plotter import plot_h5
 import dropbox
 import yaml
 import re
-from slack_send import send_img_2_slack
+from slack_send import send_img_2_slack, send_msg_2_slack
 
 logger = logging.getLogger()
 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -19,41 +20,54 @@ logging.getLogger('pika').setLevel(logging.INFO)
 __author__='Devansh Agarwal'
 __email__ = 'da0017@mix.wvu.edu'
 
+
 def stage_initer(values):
     connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
     channel = connection.channel()
-    
+
     channel.queue_declare(queue='stage03_queue', durable=True)
-    
+
     def callback(ch, method, properties, body):
         values.file=body.decode()
         logging.info(f'got it {values.file}')
         begin_main(values)
         ch.basic_ack(delivery_tag = method.delivery_tag)
         logging.info("Ack'ed")
-    
+
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(on_message_callback=callback, queue='stage03_queue')
-    
+
     channel.start_consuming()
 
+
 def begin_main(values):
-    with open("config/conf.yaml", 'r') as stream:
+    fout=plot_h5(values.file)
+    slackconfig = "config/conf.yaml"
+    if 'fake' in fout:
+        slackconfig = "config/fakefrb.yaml"
+    with open(slackconfig, 'r') as stream:
         data_loaded = yaml.load(stream)
     TOKEN = data_loaded['dropbox']['token']
     dbx = dropbox.Dropbox(TOKEN)
-    fout=plotem(values.file)
-    file_name=fout.split('/')[-1][:-3]
-    with open(fout, 'rb') as f:
-        data = f.read()
-        response=dbx.files_upload(data,f'/plots/{file_name}png',mode=dropbox.files.WriteMode.overwrite)
-        logging.info(response)
-        link=dbx.sharing_create_shared_link(f'/plots/{file_name}png')
-        url=link.url
-        slack_send_url=re.sub(r"\?dl\=0", "?dl=1", url)
-    logging.info(f'Create png at {fout}')
-    logging.info(f'Dropbox URL {slack_send_url}')
-    send_img_2_slack(slack_send_url)
+    #fout=plotem(values.file)
+    try:
+        file_name=fout.split('/')[-1][:-3]
+    except:
+        file_name='weird.'
+    try:
+        with open(fout, 'rb') as f:
+            data = f.read()
+            response=dbx.files_upload(data,f'/plots/{file_name}png',mode=dropbox.files.WriteMode.overwrite)
+            logging.info(response)
+            link=dbx.sharing_create_shared_link(f'/plots/{file_name}png')
+            url=link.url
+            slack_send_url=re.sub(r"\?dl\=0", "?dl=1", url)
+        logging.info(f'Created png at {fout}')
+        logging.info(f'Dropbox URL {slack_send_url}')
+        send_img_2_slack(slack_send_url, config=slackconfig)
+    except:
+        logging.info(f'FAILED creating png.')
+        send_msg_2_slack(f'FAILED creating plots.', config=slackconfig)
     return None
 
 
