@@ -23,15 +23,15 @@ if __name__ == "__main__":
     parser.set_defaults(verbose=False)
     values = parser.parse_args()
     logger = logging.getLogger()
-    
+
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     if values.verbose:
         logging.basicConfig(level=logging.DEBUG, format=format)
     else:
         logging.basicConfig(level=logging.INFO, format=format)
         logging.getLogger('pika').setLevel(logging.INFO)
-    
-    if values.queue not in ['stage01_queue','stage02_queue','stage03_queue','gal_cand_queue']:
+    logging.info(f'message reads {values.message}')
+    if values.queue not in ['stage01_queue','stage02_queue','stage03_queue','stage_gpuQ']:
         logging.error(f'{values.queue} not found')
     else:
         send2Q(values.queue,values.message)

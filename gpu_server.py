@@ -50,6 +50,7 @@ if __name__ == "__main__":
             pika.ConnectionParameters(host='localhost'))
 
     channel = connection.channel()
+    channel.queue_declare(queue='gpu_queue')
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue='gpu_queue', on_message_callback=on_request)
     logging.info('Awaiting jobs in the GPU queue')
