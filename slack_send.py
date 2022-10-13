@@ -2,31 +2,41 @@
 
 #from slackclient import SlackClient
 from slack import WebClient as SlackClient
-
 import yaml
 import logging
+import os
 
 def send_msg_2_slack(msg):
-    with open("config/conf.yaml", 'r') as stream:
+    conf = f"{os.environ['SLACK_CONFIG_PATH']}/conf.yaml"
+    if not os.path.exists(conf):
+        conf = "config/conf.yaml"
+    with open(conf, 'r') as stream:
         data_loaded = yaml.load(stream)
     TOKEN = data_loaded['slack']['bot_oauth']
-    
+    CHANNEL = data_loaded['slack']['channel_id']
+
     client = SlackClient(TOKEN)
     response = client.chat_postMessage(
-      channel="CPAK5A4G2",
-      text=msg
+        channel=CHANNEL,
+        text=msg
     )
     return response
 
+
 def send_img_2_slack(img):
-    with open("config/conf.yaml", 'r') as stream:
+    conf = f"{os.environ['SLACK_CONFIG_PATH']}/conf.yaml"
+    if not os.path.exists(conf):
+        conf = "config/conf.yaml"
+    with open(conf, 'r') as stream:
         data_loaded = yaml.load(stream)
     TOKEN = data_loaded['slack']['bot_oauth']
-    
+    CHANNEL = data_loaded['slack']['channel_id']
+
     client = SlackClient(TOKEN)
     attachments = [{"title": "Candidate", "image_url": img}]
-    response = client.chat_postMessage(channel='CPAK5A4G2', text='Potential Candidate',
-                attachments=attachments)
+    response = client.chat_postMessage(channel=CHANNEL,
+                                       text='Potential Candidate',
+                                       attachments=attachments)
     return response
 
 
