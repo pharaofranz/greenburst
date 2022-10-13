@@ -11,7 +11,7 @@ def send_msg_2_slack(msg):
     if not os.path.exists(conf):
         conf = "config/conf.yaml"
     with open(conf, 'r') as stream:
-        data_loaded = yaml.load(stream)
+        data_loaded = yaml.safe_load(stream)
     TOKEN = data_loaded['slack']['bot_oauth']
     CHANNEL = data_loaded['slack']['channel_id']
 
@@ -28,7 +28,7 @@ def send_img_2_slack(img):
     if not os.path.exists(conf):
         conf = "config/conf.yaml"
     with open(conf, 'r') as stream:
-        data_loaded = yaml.load(stream)
+        data_loaded = yaml.safe_load(stream)
     TOKEN = data_loaded['slack']['bot_oauth']
     CHANNEL = data_loaded['slack']['channel_id']
 
