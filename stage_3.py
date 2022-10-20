@@ -22,7 +22,7 @@ __email__ = 'da0017@mix.wvu.edu'
 
 
 def stage_initer(values):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
     channel = connection.channel()
 
     channel.queue_declare(queue='stage03_queue', durable=True)

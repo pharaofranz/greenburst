@@ -30,7 +30,7 @@ __author__='Devansh Agarwal'
 __email__ = 'da0017@mix.wvu.edu'
 
 def stage_initer(values):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
     channel = connection.channel()
     
     channel.queue_declare(queue='stage01_queue', durable=True)
@@ -57,7 +57,7 @@ def stage_initer(values):
     try:    
         channel.start_consuming()
     except (StreamLostError, ConnectionResetError) as e:
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
         channel = connection.channel()
 
 def _cmdline(command):	

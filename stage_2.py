@@ -34,7 +34,7 @@ logging.basicConfig(level=logging.INFO, format=format)
 logging.getLogger('pika').setLevel(logging.INFO)
 
 def stage_initer(values):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
     channel = connection.channel()
 
     channel.queue_declare(queue='stage02_queue', durable=True)
@@ -57,7 +57,7 @@ def stage_initer(values):
     try:
         channel.start_consuming()
     except (StreamLostError, ConnectionResetError) as e:
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
         channel = connection.channel()
 
 def _cmdline(command):

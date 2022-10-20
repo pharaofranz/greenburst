@@ -9,7 +9,7 @@ class GPURpcClient(object):
 
     def __init__(self):
         self.connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host='localhost'))
+            pika.ConnectionParameters(host='rabbitmq'))
 
         self.channel = self.connection.channel()
 

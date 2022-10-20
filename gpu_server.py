@@ -47,7 +47,7 @@ if __name__ == "__main__":
         logging.getLogger('pika').setLevel(logging.INFO)
 
     connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host='localhost'))
+            pika.ConnectionParameters(host='rabbitmq'))
 
     channel = connection.channel()
     channel.queue_declare(queue='gpu_queue')
