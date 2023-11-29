@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3.7
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import logging
@@ -46,7 +46,7 @@ def begin_main(values):
     if 'fake' in fout:
         slackconfig = "config/fakefrb.yaml"
     with open(slackconfig, 'r') as stream:
-        data_loaded = yaml.load(stream)
+        data_loaded = yaml.safe_load(stream)
     TOKEN = data_loaded['dropbox']['token']
     dbx = dropbox.Dropbox(TOKEN)
     #fout=plotem(values.file)
@@ -61,7 +61,8 @@ def begin_main(values):
             logging.info(response)
             link=dbx.sharing_create_shared_link(f'/plots/{file_name}png')
             url=link.url
-            slack_send_url=re.sub(r"\?dl\=0", "?dl=1", url)
+            #slack_send_url=re.sub(r"\?dl\=0", "?dl=1", url)
+            slack_send_url=re.sub(r"&dl=0", "&dl=1", url)
         logging.info(f'Created png at {fout}')
         logging.info(f'Dropbox URL {slack_send_url}')
         send_img_2_slack(slack_send_url, config=slackconfig)
