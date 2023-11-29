@@ -6,11 +6,8 @@ import yaml
 import logging
 import os
 
-def send_msg_2_slack(msg):
-    conf = f"{os.environ['SLACK_CONFIG_PATH']}/conf.yaml"
-    if not os.path.exists(conf):
-        conf = "config/conf.yaml"
-    with open(conf, 'r') as stream:
+def send_msg_2_slack(msg, config='config/conf.yaml'):
+    with open(config, 'r') as stream:
         data_loaded = yaml.safe_load(stream)
     TOKEN = data_loaded['slack']['bot_oauth']
     CHANNEL = data_loaded['slack']['channel_id']
@@ -23,11 +20,8 @@ def send_msg_2_slack(msg):
     return response
 
 
-def send_img_2_slack(img):
-    conf = f"{os.environ['SLACK_CONFIG_PATH']}/conf.yaml"
-    if not os.path.exists(conf):
-        conf = "config/conf.yaml"
-    with open(conf, 'r') as stream:
+def send_img_2_slack(img, config='config/conf.yaml'):
+    with open(config, 'r') as stream:
         data_loaded = yaml.safe_load(stream)
     TOKEN = data_loaded['slack']['bot_oauth']
     CHANNEL = data_loaded['slack']['channel_id']
