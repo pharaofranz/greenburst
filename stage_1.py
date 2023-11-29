@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3.7
 import matplotlib
 matplotlib.use('Agg')
 from subprocess import PIPE, Popen
