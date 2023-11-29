@@ -142,10 +142,10 @@ def begin_main(values):
                 cmd = f'mkdir -p {base_work_dir}/{experiment}/{scan}/cands'
                 subprocess.run(cmd.split(), stdout=subprocess.PIPE)
                 if nchan < 256:
-                    cmd = f'/home/franz/software/src/fetch/bin/candmaker.py -n 20 -c {base_work_dir}/{experiment}/{scan}/{scan}.csv -o {base_work_dir}/{experiment}/{scan}/cands/'
+                    cmd = f'/home/franzkirsten/git/fetch/bin/candmaker.py -n 20 -c {base_work_dir}/{experiment}/{scan}/{scan}.csv -o {base_work_dir}/{experiment}/{scan}/cands/'
                     subprocess.run(cmd.split(), stdout=subprocess.PIPE)
                 else:
-                    send2gpuQ(f'/home/franz/software/src/fetch/bin/candmaker_gpu.py -n 1 -c {base_work_dir}/{experiment}/{scan}/{scan}.csv -o {base_work_dir}/{experiment}/{scan}/cands/')
+                    send2gpuQ(f'/home/franzkirsten/git/fetch/bin/candmaker_gpu.py -n 1 -c {base_work_dir}/{experiment}/{scan}/{scan}.csv -o {base_work_dir}/{experiment}/{scan}/cands/')
                 if station == 'tr':
                     send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m a -p 0.8')
                     send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m h -p 0.8')
