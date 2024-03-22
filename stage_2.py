@@ -147,11 +147,11 @@ def begin_main(values):
                 else:
                     send2gpuQ(f'/home/franzkirsten/git/fetch/bin/candmaker_gpu.py -n 1 -c {base_work_dir}/{experiment}/{scan}/{scan}.csv -o {base_work_dir}/{experiment}/{scan}/cands/')
                 if station == 'tr':
-                    send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m a -p 0.8')
-                    send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m h -p 0.8')
+                    send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m a -p 0.8 -b 256')
+                    send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m h -p 0.8 -b 256')
                 else:
-                    send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m a')
-                    send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m h')
+                    send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m a -b 256')
+                    send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m h -b 256')
                 #send2gpuQ(f'predict.py -n 32 -b 32 -c {base_work_dir}/{experiment}/{scan}/cands/ -m a')
 
                 results_a = pd.read_csv(f'{base_work_dir}/{experiment}/{scan}/cands/results_a.csv')
