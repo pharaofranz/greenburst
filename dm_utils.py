@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
 from subprocess import PIPE, Popen, check_output
+import sys
+
+isPulsar = False  # Is used to check if the source is a pulsar or not.
 
 # Until I figure out how to send a message around that contains several arguments
 # I hardcode the FRB DMs here and have a function for pulsars below
 def get_dm(src):
+    global isPulsar
     FRB_DMs = {'R1': 557.0,
                'FRB': 557.0,
                'INBEAM': 557.0,
@@ -114,7 +118,11 @@ def get_dm(src):
                'R200929': 414,
                'R191013': 524,
                'R230814A': 696.4,
-               'R231001': 364.0
+               'R231001': 364.0,
+               '231126A': 201.7,
+               'R231126A': 201.7,
+               'R240121': 527.3,
+               'R240114': 527.7
     }
     try:
         return FRB_DMs[src]
@@ -122,6 +130,7 @@ def get_dm(src):
         try:
             cmd = "psrcat -c 'dm' -o short -nohead -nonumber {0}".format(src)
             dm = check_output(cmd, shell=True)
+            isPulsar = True
             return float(dm)
         except:
             return None
