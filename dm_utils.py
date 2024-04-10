@@ -122,7 +122,9 @@ def get_dm(src):
                '231126A': 201.7,
                'R231126A': 201.7,
                'R240121': 527.3,
-               'R240114': 527.7
+               'R240114': 527.7,
+               'R240216': 310.0,
+               'DIAG_FRB20240114A': 527.7
     }
     try:
         return FRB_DMs[src]
@@ -139,20 +141,24 @@ def get_dm(src):
 
 
 def get_src(fil_file):
-    cmd = f'header {fil_file}'
-    fil_header = check_output(cmd, shell=True).decode("utf-8").splitlines()
-    for line in fil_header:
-        if 'Source Name' in line:
-            src = line.split(':')[1].strip()
-            break
+    cmd = f'header {fil_file} -source_name'
+    src = check_output(cmd, shell=True).decode("utf-8").strip()
     return src
 
-
 def get_nchan(fil_file):
-    cmd = f'header {fil_file}'
-    fil_header = check_output(cmd, shell=True).decode("utf-8").splitlines()
-    for line in fil_header:
-        if 'Number of channels' in line:
-            nchan = line.split(':')[1].strip()
-            break
-    return int(nchan)
+    cmd = f'header {fil_file} -nchans'
+    nchans = check_output(cmd, shell=True).decode("utf-8").strip()
+    return int(nchans)
+
+def get_max_freq(fil_file):
+    cmd = f'header {fil_file} -fch1'
+    fch1 = float(check_output(cmd, shell=True).decode("utf-8").strip())
+    cmd = f'header {fil_file} -foff'
+    foff = float(check_output(cmd, shell=True).decode("utf-8").strip())
+    if foff < 0.0:
+        return fch1
+    else:
+        cmd = f'header {fil_file} -nchans'
+        nchans = int(check_output(cmd, shell=True).decode("utf-8").strip())
+        return fch1 + nchans*foff
+
