@@ -28,8 +28,14 @@ def stage_initer(values):
     channel.queue_declare(queue='stage03_queue', durable=True)
 
     def callback(ch, method, properties, body):
-        values.file=body.decode()
+        message = body.decode()
+        values.file = message.split()[0].strip()
         logging.info(f'got it {values.file}')
+        try:
+            values.dm_range_scale = float(message.split()[1].strip())
+            logging.info(f'got dm_range_scale = {values.dm_range_scale}')
+        except:
+            values.dm_range_scale = float(1.0)
         begin_main(values)
         ch.basic_ack(delivery_tag = method.delivery_tag)
         logging.info("Ack'ed")
@@ -41,7 +47,8 @@ def stage_initer(values):
 
 
 def begin_main(values):
-    fout=plot_h5(values.file)
+    logging.info(f'making plot')
+    fout=plot_h5(values.file, dm_range_scale=values.dm_range_scale)
     slackconfig = "config/conf.yaml"
     if 'fake' in fout:
         slackconfig = "config/fakefrb.yaml"
@@ -77,6 +84,8 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Be verbose')
     parser.add_argument('-d', '--daemon', dest='daemon', action='store_false', help='Run with AMQP')
     parser.add_argument('-f', '--file', nargs='+')
+    parser.add_argument('-s', '--dm_range_scale', dest='dm_range_scale', type=float, default=1.0,
+                        help='Scaling factor to zoom in on bow tie in dm-time plot for low frequencies. Default:1.0')
     parser.set_defaults(verbose=False)
     parser.set_defaults(daemon=True)
     values = parser.parse_args()

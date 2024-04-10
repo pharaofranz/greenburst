@@ -21,7 +21,7 @@ import pysigproc
 import sys
 #from influx_2df import mjd2influx, extend_df
 from gpu_client import send2gpuQ
-from dm_utils import get_dm, get_src, get_nchan
+from dm_utils import get_dm, get_src, get_nchan, get_max_freq
 from pika.exceptions import *
 from slack_send import send_msg_2_slack
 
@@ -107,11 +107,19 @@ def begin_main(values):
             flag_file=f'{base_work_dir}/flag.flag'
         logging.info(f'Using {flag_file} as flag file')
         src = get_src(fil_file)
+        logging.info(f'got {src} as source')
         expected_dm = get_dm(src)
         nchan = get_nchan(fil_file)
+        logging.info(f"calculating the max freq")
+        max_freq = get_max_freq(fil_file)
         logging.info(f'Got DM = {expected_dm} for source {src}')
         logging.info(f'Got {nchan} channels for {fil_file}.')
-
+        logging.info(f'Got {max_freq} MHz as the top of the band for {fil_file}.')
+        dm_range_scale = 1.0
+        if max_freq < 400.0:
+            dm_range_scale = 0.2
+            logging.info(f'Will limit the plot range in DM to {expected_dm} +/- {dm_range_scale*expected_dm}')
+        
         logging.info(f'Got {len(cand_df)} cands pre-filtering')
         #send_msg_2_slack(f'Got {len(cand_df)} cands pre-filtering at MJD {mjd}')
         logging.info(f'Got {len(cand_df_masked)} cands post-filtering')
@@ -145,7 +153,7 @@ def begin_main(values):
                     cmd = f'/home/franzkirsten/git/fetch/bin/candmaker.py -n 20 -c {base_work_dir}/{experiment}/{scan}/{scan}.csv -o {base_work_dir}/{experiment}/{scan}/cands/'
                     subprocess.run(cmd.split(), stdout=subprocess.PIPE)
                 else:
-                    send2gpuQ(f'/home/franzkirsten/git/fetch/bin/candmaker_gpu.py -n 1 -c {base_work_dir}/{experiment}/{scan}/{scan}.csv -o {base_work_dir}/{experiment}/{scan}/cands/')
+                    send2gpuQ(f'/home/franzkirsten/git/fetch/bin/candmaker_gpu.py -n 1 -s {dm_range_scale} -c {base_work_dir}/{experiment}/{scan}/{scan}.csv -o {base_work_dir}/{experiment}/{scan}/cands/')
                 if station == 'tr':
                     send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m a -p 0.8 -b 256')
                     send2gpuQ(f'predict.py -n 5 -c {base_work_dir}/{experiment}/{scan}/cands/ -m h -p 0.8 -b 256')
@@ -179,7 +187,7 @@ def begin_main(values):
                     send_msg_2_slack(f'{scan}, {ncands} cands', config=slackconfig)
                     files = results[label_mask | dm_mask]['candidate']
                     for h5_file in list(files):
-                        send2Q("stage03_queue", h5_file)
+                        send2Q("stage03_queue", f"{h5_file} {dm_range_scale}")
                     #for file in files:
                     #    send2Q("stage03_queue", file)
                 #else:
