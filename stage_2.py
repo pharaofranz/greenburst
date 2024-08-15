@@ -205,7 +205,7 @@ if __name__=='__main__':
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Be verbose')
     parser.add_argument('-d', '--daemon', dest='daemon', action='store_false', help='Run with AMQP')
     parser.add_argument('-s', '--snr', type=int, help='sigma over which values are tagged as RFI', default=7.0)
-    parser.add_argument('-w', '--width', type=int, help = 'log 2 width of the candidates', default=7) #10
+    parser.add_argument('-w', '--width', type=int, help = 'log 2 width of the candidates', default=12) #10
     parser.add_argument('-D', '--dm_min', type=float, help = 'minimum DM to look out for', default=10) #10
     parser.add_argument('-m', '--members', type=int, help='minimum number of members in the cluster', default=2) #2
     parser.add_argument('-f', '--files', type=str, help='cand files')
