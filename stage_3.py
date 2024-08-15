@@ -66,15 +66,16 @@ def begin_main(values):
             data = f.read()
             response=dbx.files_upload(data,f'/plots/{file_name}png',mode=dropbox.files.WriteMode.overwrite)
             logging.info(response)
-            link=dbx.sharing_create_shared_link(f'/plots/{file_name}png')
+            link=dbx.sharing_create_shared_link_with_settings(f'/plots/{file_name}png')
             url=link.url
             #slack_send_url=re.sub(r"\?dl\=0", "?dl=1", url)
             slack_send_url=re.sub(r"&dl=0", "&dl=1", url)
         logging.info(f'Created png at {fout}')
         logging.info(f'Dropbox URL {slack_send_url}')
         send_img_2_slack(slack_send_url, config=slackconfig)
-    except:
+    except Exception as e:
         logging.info(f'FAILED creating png.')
+        logging.info(f'{e}')
         send_msg_2_slack(f'FAILED creating plots.', config=slackconfig)
     return None
 
